@@ -8,7 +8,7 @@ def setup_renderer():
     volume_property = vtk.vtkVolumeProperty()
     volume = vtk.vtkVolume()
 
-    reader.SetDirectoryName(r"G:\Open GL\Tutorial 11\digest_article\digest_article\brain_001.dcm")
+    reader.SetDirectoryName(r"digest_article\brain_001.dcm")
     mapper.SetInputConnection(reader.GetOutputPort())
     volume.SetMapper(mapper)
     volume.SetProperty(volume_property)
