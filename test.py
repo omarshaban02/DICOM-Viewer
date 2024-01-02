@@ -1,35 +1,44 @@
-import vtkmodules.vtkRenderingOpenGL2
-from vtkmodules.vtkCommonColor import vtkNamedColors
-from vtkmodules.vtkIOImage import vtkDICOMImageReader
-from vtkmodules.vtkInteractionImage import vtkImageViewer2
-from vtkmodules.vtkRenderingCore import vtkRenderWindowInteractor
+
+import vtk
+
+# Load DICOM images
+reader = vtk.vtkDICOMImageReader()
+reader.SetDirectoryName("digest_article")
+reader.Update()
+# Apply Marching Cubes to extract isosurface
+marchingCubes = vtk.vtkMarchingCubes()
+marchingCubes.SetInputConnection(reader.GetOutputPort())
+marchingCubes.SetValue(0, 90)  # Adjust isovalue as needed
+
+# Smooth the resulting surface
+smoother = vtk.vtkWindowedSincPolyDataFilter()
+smoother.SetInputConnection(marchingCubes.GetOutputPort())
+smoother.SetNumberOfIterations(100)  # Adjust number of iterations for desired smoothness
+smoother.BoundarySmoothingOn()
+smoother.SetFeatureAngle(120)
+smoother.SetEdgeAngle(90)
+smoother.SetPassBand(0.1)
+
+# Create a mapper and actor for the smoothed surface
+mapper = vtk.vtkPolyDataMapper()
+mapper.SetInputConnection(smoother.GetOutputPort())
+
+actor = vtk.vtkActor()
+actor.SetMapper(mapper)
+
+# Create a renderer and render window
+renderer = vtk.vtkRenderer()
+renderer.AddActor(actor)
+
+renderWindow = vtk.vtkRenderWindow()
+renderWindow.AddRenderer(renderer)
+renderWindow.SetSize(640, 480)
+
+# Create an interactor and start rendering
+interactor = vtk.vtkRenderWindowInteractor()
+interactor.SetRenderWindow(renderWindow)
 
 
-
-
-def main():
-    colors = vtkNamedColors()
-
-    
-
-    # Read the DICOM file
-    reader = vtkDICOMImageReader()
-    reader.SetFileName(r"D:\projects\project\DICOM Viewer\DICOM-Viewer\dicom_files\image-00000.dcm")
-    reader.Update()
-
-    # Visualize
-    image_viewer = vtkImageViewer2()
-    image_viewer.SetInputConnection(reader.GetOutputPort())
-    render_window_interactor = vtkRenderWindowInteractor()
-    image_viewer.SetupInteractor(render_window_interactor)
-    image_viewer.Render()
-    image_viewer.GetRenderer().SetBackground(colors.GetColor3d("SlateGray"))
-    image_viewer.GetRenderWindow().SetWindowName("ReadDICOM")
-    image_viewer.GetRenderer().ResetCamera()
-    image_viewer.Render()
-
-    render_window_interactor.Start()
-
-
-if __name__ == "__main__":
-    main()
+interactor.Initialize()
+renderWindow.Render()
+interactor.Start()
