@@ -1,89 +1,133 @@
-# import pydicom
-# import vtk
-# import pyvista as pv
-# import numpy as np
-# import glob
-#
-# # Load DICOM files into a list
-# dcm_files = [pydicom.dcmread(f) for f in sorted(glob.glob(r"G:\Open GL\Tutorial 11\DICOM-Viewer\
-# # Get pixel arrays and spacing information
-# print(dcm_files[0].PixelSpacing)
-# pixel_arrays = [dcm.pixel_array for dcm in dcm_files]
-# for dcm in dcm_files:
-#     spacing = np.array([dcm.PixelSpacing[0], dcm.PixelSpacing[1], float(dcm.SliceThickness)])
-#     # Combine arrays into a 3D volume
-#     volume = np.stack(pixel_arrays, axis=2)
-#     # Create VTK image data from the volume
-#     vtk_image = vtk.vtkImageData()
-#     vtk_image.SetDimensions(volume.shape)
-#     vtk_image.SetSpacing(spacing)
-#     vtk_image.AllocateScalars(vtk.VTK_UNSIGNED_SHORT, 1)
-#
-#     # Copy pixel data to VTK image
-#     vtk_array = vtk.util.numpy_support.numpy_to_vtk(volume.ravel(order='F'), deep=True, array_type=vtk.VTK_UNSIGNED_SHORT)
-#     vtk_image.GetPointData().SetScalars(vtk_array)
-#     # Apply Marching Cubes algorithm to create a surface mesh
-#     contour = vtk.vtkMarchingCubes()
-#     contour.SetInputData(vtk_image)
-#     contour.SetValue(0, 500)  # Adjust threshold as needed
-#     contour.Update()
-#
-#     # Create a PyVista PolyData object for visualization
-#     surface = pv.wrap(contour.GetOutput())
-#     # Display the model using PyVista
-#     plotter = pv.Plotter()
-#     plotter.add_mesh(surface, smooth_shading=True)
-#     plotter.show()
-#
-
-import pydicom
+import os
 import vtk
-import pyvista as pv
-import numpy as np
-import glob
+import pydicom
+from vtk.util import numpy_support
 
-# Load DICOM files into a list
-dcm_files = [pydicom.dcmread(f) for f in sorted(glob.glob(r"G:\Open GL\Tutorial 11\DICOM-Viewer\dicom_files\0012.DCM"))]
+def load_dicom_series(folder_path):
+    reader = vtk.vtkDICOMImageReader()
+    reader.SetDirectoryName(folder_path)
+    reader.Update()
+    return reader.GetOutput()
 
-# Create VTK image data outside the loop
-vtk_image = vtk.vtkImageData()
+def vtk_image_to_numpy(vtk_image):
+    shape = vtk_image.GetDimensions()[::-1]
+    vtk_array = vtk_image.GetPointData().GetScalars()
+    numpy_array = numpy_support.vtk_to_numpy(vtk_array)
+    return numpy_array.reshape(shape)
 
-for dcm in dcm_files:
-    # Get pixel arrays and spacing information for each DICOM file
-    pixel_arrays = [dcm.pixel_array]
+def create_surface_model(numpy_array):
+    image_data = vtk.vtkImageData()
+    image_data.SetDimensions(numpy_array.shape)
+    image_data.AllocateScalars(vtk.VTK_UNSIGNED_CHAR, 1)
 
-    # Try to get pixel spacing from 'PixelSpacing'
-    if hasattr(dcm, 'PixelSpacing'):
-        spacing = np.array([dcm.PixelSpacing[0], dcm.PixelSpacing[1], float(dcm.SliceThickness)])
-    elif hasattr(dcm, 'SliceThickness'):
-        # If 'PixelSpacing' is not available, use 'SliceThickness'
-        spacing = np.array([1.0, 1.0, float(dcm.SliceThickness)])
-    else:
-        print("Pixel spacing information not found.")
-        continue
+    for i in range(numpy_array.shape[0]):
+        for j in range(numpy_array.shape[1]):
+            for k in range(numpy_array.shape[2]):
+                image_data.SetScalarComponentFromFloat(i, j, k, 0, numpy_array[i, j, k])
 
-    # Combine arrays into a 3D volume
-    volume = np.stack(pixel_arrays, axis=2)
+    contour_filter = vtk.vtkContourFilter()
+    contour_filter.SetInputData(image_data)
+    contour_filter.SetValue(0, 100)  # Adjust the threshold value as needed
 
-    # Set dimensions and spacing for VTK image data
-    vtk_image.SetDimensions(volume.shape)
-    vtk_image.SetSpacing(spacing)
-    vtk_image.AllocateScalars(vtk.VTK_UNSIGNED_SHORT, 1)
+    mapper = vtk.vtkPolyDataMapper()
+    mapper.SetInputConnection(contour_filter.GetOutputPort())
 
-    # Copy pixel data to VTK image
-    vtk_array = vtk.util.numpy_support.numpy_to_vtk(volume.ravel(order='F'), deep=True, array_type=vtk.VTK_UNSIGNED_SHORT)
-    vtk_image.GetPointData().SetScalars(vtk_array)
+    actor = vtk.vtkActor()
+    actor.SetMapper(mapper)
 
-    # Apply Marching Cubes algorithm to create a surface mesh
-    contour = vtk.vtkMarchingCubes()
-    contour.SetInputData(vtk_image)
-    contour.SetValue(0, 500)  # Adjust threshold as needed
-    contour.Update()
+    return actor
 
-    # Create a PyVista PolyData object for visualization
-    surface = pv.wrap(contour.GetOutput())
+def main():
+    folder_path = "./digest_article"
+    reader = load_dicom_series(folder_path)
+    numpy_array = vtk_image_to_numpy(reader)
+    actor = create_surface_model(numpy_array)
 
-    # Display the model using PyVista
-    plotter = pv.Plotter()
-    plotter.add_mesh(surface, smooth_shading=True)
-    plotter.show()
+    # Set up renderer and render window
+    renderer = vtk.vtkRenderer()
+    renderer.AddActor(actor)
+    renderer.SetBackground(0, 0, 0)  # Set background color to white
+
+    render_window = vtk.vtkRenderWindow()
+    render_window.AddRenderer(renderer)
+    render_window.SetSize(500, 500)
+
+    # Set up render window interactor
+    render_window_interactor = vtk.vtkRenderWindowInteractor()
+    render_window_interactor.SetRenderWindow(render_window)
+
+    # Initialize and start the rendering loop
+    render_window.Render()
+    render_window_interactor.Start()
+
+if __name__ == "__main__":
+    main()
+#
+# import os
+# import vtk
+# import pydicom
+# from vtk.util import numpy_support
+#
+# def load_dicom_series(folder_path):
+#     reader = vtk.vtkDICOMImageReader()
+#     reader.SetDirectoryName(folder_path)
+#     reader.Update()
+#     return reader.GetOutput()
+#
+# def vtk_image_to_numpy(vtk_image):
+#     shape = vtk_image.GetDimensions()[::-1]
+#     vtk_array = vtk_image.GetPointData().GetScalars()
+#     numpy_array = numpy_support.vtk_to_numpy(vtk_array)
+#     return numpy_array.reshape(shape)
+#
+# def create_volume_actor(numpy_array):
+#     image_data = vtk.vtkImageData()
+#     image_data.SetDimensions(numpy_array.shape)
+#     image_data.AllocateScalars(vtk.VTK_UNSIGNED_CHAR, 1)
+#
+#     for i in range(numpy_array.shape[0]):
+#         for j in range(numpy_array.shape[1]):
+#             for k in range(numpy_array.shape[2]):
+#                 image_data.SetScalarComponentFromFloat(i, j, k, 0, numpy_array[i, j, k])
+#
+#     volume_mapper = vtk.vtkGPUVolumeRayCastMapper()
+#     volume_mapper.SetInputData(image_data)
+#
+#     volume_property = vtk.vtkVolumeProperty()
+#     volume_property.SetColor(vtk.vtkColorTransferFunction())
+#     volume_property.SetScalarOpacity(vtk.vtkPiecewiseFunction())
+#
+#     volume = vtk.vtkVolume()
+#     volume.SetMapper(volume_mapper)
+#     volume.SetProperty(volume_property)
+#
+#     return volume
+#
+# def main():
+#     folder_path = "./digest_article"
+#     reader = load_dicom_series(folder_path)
+#     numpy_array = vtk_image_to_numpy(reader)
+#     volume_actor = create_volume_actor(numpy_array)
+#
+#     # Set up renderer and render window
+#     renderer = vtk.vtkRenderer()
+#     renderer.AddVolume(volume_actor)
+#     renderer.SetBackground(1, 1, 1)  # Set background color to white
+#
+#     render_window = vtk.vtkRenderWindow()
+#     render_window.AddRenderer(renderer)
+#     render_window.SetSize(800, 800)
+#
+#     # Set up render window interactor
+#     render_window_interactor = vtk.vtkRenderWindowInteractor()
+#     render_window_interactor.SetRenderWindow(render_window)
+#
+#     # Initialize and start the rendering loop
+#     render_window.Render()
+#     render_window_interactor.Start()
+#
+# if __name__ == "__main__":
+#     main()
+#
+
+

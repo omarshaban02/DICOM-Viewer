@@ -8,14 +8,14 @@ def setup_renderer():
     volume_property = vtk.vtkVolumeProperty()
     volume = vtk.vtkVolume()
 
-    reader.SetDirectoryName(r"G:\Open GL\Tutorial 11\DICOM-Viewer\dicom_files\image-00000.dcm")
+    reader.SetDirectoryName(r"G:\Open GL\Tutorial 11\digest_article\digest_article\brain_001.dcm")
     mapper.SetInputConnection(reader.GetOutputPort())
     volume.SetMapper(mapper)
     volume.SetProperty(volume_property)
 
     renderer = vtk.vtkRenderer()
     renderer.AddVolume(volume)
-    renderer.SetBackground(1.0, 1.0, 1.0) 
+    renderer.SetBackground(1.0, 1.0, 1.0)
 
     render_window = vtk.vtkRenderWindow()
     render_window.SetWindowName("DICOM 3D Surface Rendering")
