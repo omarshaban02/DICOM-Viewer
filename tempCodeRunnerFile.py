@@ -1,1 +1,0 @@
-digest_article\brain_001.dcm
