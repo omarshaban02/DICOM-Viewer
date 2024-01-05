@@ -1,80 +1,103 @@
-import os
 import vtk
-import pydicom
-import numpy as np
-from vtk.util import numpy_support
 
-def load_dicom_series(folder_path):
-    reader = vtk.vtkDICOMImageReader()
-    reader.SetDirectoryName(folder_path)
-    reader.Update()
-    return reader.GetOutput()
+# Load DICOM images
+reader = vtk.vtkDICOMImageReader()
+reader.SetDirectoryName("digest_article")
+reader.Update()
 
-def vtk_image_to_numpy(vtk_image):
-    shape = vtk_image.GetDimensions()[::-1]
-    vtk_array = vtk_image.GetPointData().GetScalars()
-    numpy_array = numpy_support.vtk_to_numpy(vtk_array)
-    numpy_array = numpy_array.reshape(shape)
-    n_layer_repetitions = 5
-    stretched_array = np.repeat(numpy_array,n_layer_repetitions,axis=0)
-    
-    return stretched_array
+# Create a renderer and render window
+renderer = vtk.vtkRenderer()
+renderWindow = vtk.vtkRenderWindow()
+renderWindow.AddRenderer(renderer)
+renderWindow.SetSize(640, 480)
 
-def create_surface_model(numpy_array):
-    image_data = vtk.vtkImageData()
-    image_data.SetDimensions(numpy_array.shape)
-    image_data.AllocateScalars(vtk.VTK_DOUBLE, 1)
-    
-    for i in range(numpy_array.shape[0]):
-        for j in range(numpy_array.shape[1]):
-            for k in range(numpy_array.shape[2]):
-                image_data.SetScalarComponentFromDouble(i,j,k, 0, numpy_array[i, j, k])
-    # vtk_array = vtk.util.numpy_support.numpy_to_vtk(numpy_array.reval(order='F'),deep=True,array_type = vtk.VTK_UNSIGNED_CHAR)
-    # image_data.GetPointData().SetScalars(vtk_array)
+# Create an interactor
+interactor = vtk.vtkRenderWindowInteractor()
+interactor.SetRenderWindow(renderWindow)
 
-    iso_surface = vtk.vtkMarchingCubes()
-    iso_surface.SetInputData(image_data)
-    iso_surface.SetValue(0,120)
+# Initialize the interactor
+interactor.Initialize()
 
-    mapper = vtk.vtkPolyDataMapper()
-    mapper.SetInputConnection(iso_surface.GetOutputPort())
-    actor =  vtk.vtkActor()
-    actor.SetMapper(mapper)
-    # contour_filter = vtk.vtkContourFilter()
-    # contour_filter.SetInputData(image_data)
-    # contour_filter.SetValue(0, 100)  # Adjust the threshold value as needed
+# Function to switch between surface and ray casting rendering
+def toggle_rendering(obj, event):
+    if actor.GetVisibility():
+        actor.SetVisibility(False)
+        volume.SetVisibility(True)
+        renderer.ResetCamera()  # Reset camera for better view of the volume
+    else:
+        actor.SetVisibility(True)
+        volume.SetVisibility(False)
 
-    # mapper = vtk.vtkPolyDataMapper()
-    # mapper.SetInputConnection(contour_filter.GetOutputPort())
+# Create a text actor to display instructions
+textActor = vtk.vtkTextActor()
+textActor.SetTextScaleModeToNone()
+textActor.GetPositionCoordinate().SetCoordinateSystemToNormalizedDisplay()
+textActor.SetPosition(0.1, 0.9)
+textActor.GetTextProperty().SetFontSize(18)
+textActor.GetTextProperty().SetColor(1.0, 1.0, 1.0)
+textActor.SetInput("Press 'S' to switch between the two moods")
 
-    # actor = vtk.vtkActor()
-    # actor.SetMapper(mapper)
+# Add the text actor to the renderer
+renderer.AddActor(textActor)
 
-    return actor
+# Create an observer for keypress events
+def keypress(obj, event):
+    key = interactor.GetKeySym()
+    if key == "s" or key == "S":
+        toggle_rendering(None, None)
 
-def main():
-    folder_path = "./digest_article"
-    reader = load_dicom_series(folder_path)
-    numpy_array = vtk_image_to_numpy(reader)
-    actor = create_surface_model(numpy_array)
+# Add the observer for keypress events
+interactor.AddObserver("KeyPressEvent", keypress)
 
-    # Set up renderer and render window
-    renderer = vtk.vtkRenderer()
-    renderer.AddActor(actor)
-    renderer.SetBackground(0, 0, 0)  # Set background color to white
+# Apply Marching Cubes to extract isosurface
+marchingCubes = vtk.vtkMarchingCubes()
+marchingCubes.SetInputConnection(reader.GetOutputPort())
+marchingCubes.SetValue(0, 90)  # Adjust isovalue as needed
 
-    render_window = vtk.vtkRenderWindow()
-    render_window.AddRenderer(renderer)
-    render_window.SetSize(500, 500)
+# Smooth the resulting surface
+smoother = vtk.vtkWindowedSincPolyDataFilter()
+smoother.SetInputConnection(marchingCubes.GetOutputPort())
+smoother.SetNumberOfIterations(100)  # Adjust number of iterations for desired smoothness
+smoother.BoundarySmoothingOn()
+smoother.SetFeatureAngle(120)
+smoother.SetEdgeAngle(90)
+smoother.SetPassBand(0.1)
 
-    # Set up render window interactor
-    render_window_interactor = vtk.vtkRenderWindowInteractor()
-    render_window_interactor.SetRenderWindow(render_window)
+# Create a mapper and actor for the smoothed surface
+mapper = vtk.vtkPolyDataMapper()
+mapper.SetInputConnection(smoother.GetOutputPort())
 
-    # Initialize and start the rendering loop
-    render_window.Render()
-    render_window_interactor.Start()
+actor = vtk.vtkActor()
+actor.SetMapper(mapper)
 
-if __name__ == "__main__":
-    main()
-#
+# Create a volume mapper and property for ray casting rendering
+volumeMapper = vtk.vtkSmartVolumeMapper()
+volumeMapper.SetInputConnection(reader.GetOutputPort())
+
+volumeProperty = vtk.vtkVolumeProperty()
+volume = vtk.vtkVolume()
+volume.SetMapper(volumeMapper)
+volume.SetProperty(volumeProperty)
+
+# Set up ray casting properties (you may need to adjust these based on your data)
+colorFunc = vtk.vtkColorTransferFunction()
+colorFunc.AddRGBPoint(0, 0.0, 0.0, 0.0)
+colorFunc.AddRGBPoint(255, 1.0, 1.0, 1.0)
+
+scalarOpacity = vtk.vtkPiecewiseFunction()
+scalarOpacity.AddPoint(0, 0.0)
+scalarOpacity.AddPoint(255, 1.0)
+
+volumeProperty.SetColor(colorFunc)
+volumeProperty.SetScalarOpacity(scalarOpacity)
+volumeProperty.ShadeOn()
+
+# Add the actor and volume to the renderer (initially only the actor is visible)
+renderer.AddActor(actor)
+renderer.AddVolume(volume)
+volume.SetVisibility(False)
+
+# Start rendering
+renderWindow.Render()
+interactor.Start()
+
