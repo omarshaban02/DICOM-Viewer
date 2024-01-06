@@ -11,8 +11,8 @@ from PyQt5.QtWidgets import QApplication, QMainWindow
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 from vtkmodules.all import vtkConeSource, vtkPolyDataMapper, vtkActor, vtkRenderer
 
-
 ui, _ = loadUiType('main.ui')
+
 
 class MainApp(QMainWindow, ui):
     def __init__(self, parent=None):
@@ -20,10 +20,8 @@ class MainApp(QMainWindow, ui):
         self.setupUi(self)
         self.resize(1450, 900)
 
-
         self.folder_name = None
         self.iso_value = 90
-
 
         # Set a layout for vtk_frame
         self.vtk_frame.setLayout(QVBoxLayout())
@@ -34,12 +32,10 @@ class MainApp(QMainWindow, ui):
         # Add the vtk_widget to the vtk_frame's layout
         self.vtk_frame.layout().addWidget(self.vtk_widget)
 
-
         self.open_btn.clicked.connect(self.open_folder)
 
         self.iso_slider.valueChanged.connect(self.render_function)
         self.surface_rendering_radioButton.toggled.connect(self.render_function)
-
 
     def open_folder(self):
         current_dir = os.path.dirname(os.path.abspath(__file__))

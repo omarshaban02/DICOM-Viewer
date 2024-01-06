@@ -350,7 +350,7 @@ border:none;
                  <cursorShape>PointingHandCursor</cursorShape>
                 </property>
                 <property name="text">
-                 <string>open</string>
+                 <string>Open</string>
                 </property>
                </widget>
               </item>
