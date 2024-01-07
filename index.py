@@ -19,25 +19,6 @@ from vtkmodules.all import vtkConeSource, vtkPolyDataMapper, vtkActor, vtkRender
 ui, _ = loadUiType('main.ui')
 
 
-# We use thread to make the change in iso_value and recall the render function to become more faster
-
-
-class RenderThread(QThread):
-    render_complete = pyqtSignal(vtk.vtkActor, vtk.vtkRenderer)
-
-    def __init__(self, parent=None):
-        super(RenderThread, self).__init__(parent)
-        self.parent = parent
-
-    def run(self):
-        if self.parent.surface_rendering_radioButton.isChecked():
-            actor, renderer = self.parent.surface_rendering()
-        else:
-            actor, renderer = self.parent.ray_casting_rendering()
-
-        self.render_complete.emit(actor, renderer)
-
-
 class MainApp(QMainWindow, ui):
     def __init__(self, parent=None):
         super(MainApp, self).__init__(parent)
@@ -47,8 +28,6 @@ class MainApp(QMainWindow, ui):
         self.folder_name = None
         self.iso_value = self.iso_slider.value()
         self.render_timer = QTimer(self)
-        self.render_thread = RenderThread(self)
-        self.render_thread.render_complete.connect(self.on_render_complete)
 
         # We Set up a timer to delay rendering after slider changes
         self.render_timer.setSingleShot(True)
@@ -64,11 +43,11 @@ class MainApp(QMainWindow, ui):
         # connecting with functions
         self.open_btn.clicked.connect(self.open_folder)
         self.iso_slider.valueChanged.connect(self.start_render_timer)
-        self.surface_rendering_radioButton.toggled.connect(self.start_render_timer)
+        self.surface_rendering_radioButton.toggled.connect(self.render_function)
 
     def start_render_timer(self):
-        # Start the timer to delay rendering after slider changes
-        self.render_timer.start(200)
+        if self.surface_rendering_radioButton.isChecked():
+            self.render_timer.start(150)
 
     def open_folder(self):
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -78,22 +57,6 @@ class MainApp(QMainWindow, ui):
             self.render_function()
 
     def render_function(self):
-        if not self.render_thread.isRunning():
-            self.render_thread.start()
-
-    def on_render_complete(self, actor, renderer):
-        # Clear existing renderers in the render window
-        render_window = self.vtk_widget.GetRenderWindow()
-        render_window.RemoveAllRenderers()
-
-        # Set up the VTK render window
-        render_window.AddRenderer(renderer)
-
-        # Set up the VTK interactor and start rendering
-        interactor = render_window.GetInteractor()
-        interactor.Initialize()
-
-    def render_function(self):
         if self.surface_rendering_radioButton.isChecked():
             actor, renderer = self.surface_rendering()
         else:
@@ -101,11 +64,9 @@ class MainApp(QMainWindow, ui):
 
         # Set up the VTK render window
         render_window = self.vtk_widget.GetRenderWindow()
-
-        # Set the background color to black
-        renderer.SetBackground(0.0, 0.0, 0.0)  # RGB values for black
-
+        renderer.SetBackground(0.0, 0.0, 0.0)
         render_window.AddRenderer(renderer)
+
         # Set up the VTK interactor and start rendering
         interactor = render_window.GetInteractor()
         interactor.Initialize()
@@ -118,42 +79,42 @@ class MainApp(QMainWindow, ui):
             reader.Update()
 
             # Create a volume property
-            volumeProperty = vtk.vtkVolumeProperty()
-            volumeProperty.ShadeOn()
-            volumeProperty.SetInterpolationTypeToLinear()
+            volume_property = vtk.vtkVolumeProperty()
+            volume_property.ShadeOn()
+            volume_property.SetInterpolationTypeToLinear()
 
             # Create a transfer function
-            colorFunction = vtk.vtkColorTransferFunction()
-            colorFunction.AddRGBPoint(0, 0.0, 0.0, 0.0)
-            colorFunction.AddRGBPoint(255, 1.0, 1.0, 1.0)
+            color_function = vtk.vtkColorTransferFunction()
+            color_function.AddRGBPoint(0, 0.0, 0.0, 0.0)
+            color_function.AddRGBPoint(255, 1.0, 1.0, 1.0)
 
-            opacityFunction = vtk.vtkPiecewiseFunction()
-            opacityFunction.AddPoint(0, 0.0)
-            opacityFunction.AddPoint(255, 1.0)
+            opacity_function = vtk.vtkPiecewiseFunction()
+            opacity_function.AddPoint(0, 0.0)
+            opacity_function.AddPoint(255, 1.0)
 
             # Set the transfer functions in the volume property
-            volumeProperty.SetColor(colorFunction)
-            volumeProperty.SetScalarOpacity(opacityFunction)
+            volume_property.SetColor(color_function)
+            volume_property.SetScalarOpacity(opacity_function)
 
             # Set scalar range for transfer functions
-            scalarRange = reader.GetOutput().GetScalarRange()
-            volumeProperty.SetScalarOpacityUnitDistance(scalarRange[1] - scalarRange[0])
+            scalar_range = reader.GetOutput().GetScalarRange()
+            volume_property.SetScalarOpacityUnitDistance(scalar_range[1] - scalar_range[0])
 
             # Create a volume mapper and connect it to the DICOM reader
-            volumeMapper = vtk.vtkGPUVolumeRayCastMapper()  # Use GPU-accelerated ray casting
-            volumeMapper.SetInputConnection(reader.GetOutputPort())
+            volume_mapper = vtk.vtkGPUVolumeRayCastMapper()  # Use GPU-accelerated ray casting
+            volume_mapper.SetInputConnection(reader.GetOutputPort())
 
             # Create a volume actor and set its mapper and property
-            volumeActor = vtk.vtkVolume()
-            volumeActor.SetMapper(volumeMapper)
-            volumeActor.SetProperty(volumeProperty)
+            volume_actor = vtk.vtkVolume()
+            volume_actor.SetMapper(volume_mapper)
+            volume_actor.SetProperty(volume_property)
 
             # Create a renderer and add the volume actor
             renderer = vtk.vtkRenderer()
-            renderer.SetBackground(0.0, 0.0, 0.0)  # Set background color to black
-            renderer.AddVolume(volumeActor)
+            renderer.SetBackground(0.0, 0.0, 0.0)
+            renderer.AddVolume(volume_actor)
 
-            return volumeActor, renderer
+            return volume_actor, renderer
 
     def surface_rendering(self):
         if self.folder_name is not None:
@@ -161,16 +122,17 @@ class MainApp(QMainWindow, ui):
             reader = vtk.vtkDICOMImageReader()
             reader.SetDirectoryName(f"{self.folder_name}")
             reader.Update()
-            # Apply Marching Cubes to extract isosurface
-            marchingCubes = vtk.vtkMarchingCubes()
+
             self.iso_value = self.iso_slider.value()
-            print(self.iso_value)
-            marchingCubes.SetInputConnection(reader.GetOutputPort())
-            marchingCubes.SetValue(0, self.iso_value)  # Adjust isovalue as needed
+
+            # Apply Marching Cubes to extract iso_surface
+            marching_cubes = vtk.vtkMarchingCubes()
+            marching_cubes.SetInputConnection(reader.GetOutputPort())
+            marching_cubes.SetValue(0, self.iso_value)  # Adjust isovalue as needed
 
             # Smooth the resulting surface
             smoother = vtk.vtkWindowedSincPolyDataFilter()
-            smoother.SetInputConnection(marchingCubes.GetOutputPort())
+            smoother.SetInputConnection(marching_cubes.GetOutputPort())
             smoother.SetNumberOfIterations(100)  # Adjust number of iterations for desired smoothness
             smoother.BoundarySmoothingOn()
             smoother.SetFeatureAngle(120)
