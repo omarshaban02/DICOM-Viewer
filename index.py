@@ -50,6 +50,7 @@ class MainApp(QMainWindow, ui):
             self.render_function()
 
     def render_function(self):
+        self.iso_value = self.iso_slider.value()
 
         if self.surface_rendering_radioButton.isChecked():
             actor, renderer = self.surface_rendering()
