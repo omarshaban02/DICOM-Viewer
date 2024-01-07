@@ -1,18 +1,42 @@
 from PyQt5.QtWidgets import *
-
+from PyQt5.QtWidgets import *
+import pyqtgraph as pg
+import sys
+import os
+from pathlib import Path
+from PyQt5.uic import loadUiType
 import pyqtgraph as pg
 import sys
 import os
 from pathlib import Path
 
-from PyQt5.uic import loadUiType
 import vtk
 from PyQt5.QtWidgets import QApplication, QMainWindow
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 from vtkmodules.all import vtkConeSource, vtkPolyDataMapper, vtkActor, vtkRenderer
 
-
 ui, _ = loadUiType('main.ui')
+
+
+# We use thread to make the change in iso_value and recall the render function to become more faster
+
+
+class RenderThread(QThread):
+    render_complete = pyqtSignal(vtk.vtkActor, vtk.vtkRenderer)
+
+    def __init__(self, parent=None):
+        super(RenderThread, self).__init__(parent)
+        self.parent = parent
+
+    def run(self):
+        if self.parent.surface_rendering_radioButton.isChecked():
+            actor, renderer = self.parent.surface_rendering()
+        else:
+            actor, renderer = self.parent.ray_casting_rendering()
+
+        self.render_complete.emit(actor, renderer)
+
 
 class MainApp(QMainWindow, ui):
     def __init__(self, parent=None):
@@ -20,38 +44,56 @@ class MainApp(QMainWindow, ui):
         self.setupUi(self)
         self.resize(1450, 900)
 
-
         self.folder_name = None
-        self.iso_value = 90
+        self.iso_value = self.iso_slider.value()
+        self.render_timer = QTimer(self)
+        self.render_thread = RenderThread(self)
+        self.render_thread.render_complete.connect(self.on_render_complete)
 
+        # We Set up a timer to delay rendering after slider changes
+        self.render_timer.setSingleShot(True)
+        self.render_timer.timeout.connect(self.render_function)
 
-        # Set a layout for vtk_frame
+        # Setting a layout for our vtk_frame
         self.vtk_frame.setLayout(QVBoxLayout())
 
         # Create a VTK rendering widget
         self.vtk_widget = QVTKRenderWindowInteractor(self.vtk_frame)
-
-        # Add the vtk_widget to the vtk_frame's layout
         self.vtk_frame.layout().addWidget(self.vtk_widget)
 
-
+        # connecting with functions
         self.open_btn.clicked.connect(self.open_folder)
+        self.iso_slider.valueChanged.connect(self.start_render_timer)
+        self.surface_rendering_radioButton.toggled.connect(self.start_render_timer)
 
-        self.iso_slider.valueChanged.connect(self.render_function)
-        self.surface_rendering_radioButton.toggled.connect(self.render_function)
-
+    def start_render_timer(self):
+        # Start the timer to delay rendering after slider changes
+        self.render_timer.start(200)
 
     def open_folder(self):
         current_dir = os.path.dirname(os.path.abspath(__file__))
         folder_path = QFileDialog.getExistingDirectory(self, 'Open Folder', current_dir)
         if folder_path:
             self.folder_name = os.path.basename(folder_path)
-            print(self.folder_name)
             self.render_function()
 
     def render_function(self):
-        self.iso_value = self.iso_slider.value()
+        if not self.render_thread.isRunning():
+            self.render_thread.start()
 
+    def on_render_complete(self, actor, renderer):
+        # Clear existing renderers in the render window
+        render_window = self.vtk_widget.GetRenderWindow()
+        render_window.RemoveAllRenderers()
+
+        # Set up the VTK render window
+        render_window.AddRenderer(renderer)
+
+        # Set up the VTK interactor and start rendering
+        interactor = render_window.GetInteractor()
+        interactor.Initialize()
+
+    def render_function(self):
         if self.surface_rendering_radioButton.isChecked():
             actor, renderer = self.surface_rendering()
         else:
@@ -59,8 +101,11 @@ class MainApp(QMainWindow, ui):
 
         # Set up the VTK render window
         render_window = self.vtk_widget.GetRenderWindow()
-        render_window.AddRenderer(renderer)
 
+        # Set the background color to black
+        renderer.SetBackground(0.0, 0.0, 0.0)  # RGB values for black
+
+        render_window.AddRenderer(renderer)
         # Set up the VTK interactor and start rendering
         interactor = render_window.GetInteractor()
         interactor.Initialize()
@@ -118,6 +163,8 @@ class MainApp(QMainWindow, ui):
             reader.Update()
             # Apply Marching Cubes to extract isosurface
             marchingCubes = vtk.vtkMarchingCubes()
+            self.iso_value = self.iso_slider.value()
+            print(self.iso_value)
             marchingCubes.SetInputConnection(reader.GetOutputPort())
             marchingCubes.SetValue(0, self.iso_value)  # Adjust isovalue as needed
 
