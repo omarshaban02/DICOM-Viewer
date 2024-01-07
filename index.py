@@ -39,7 +39,7 @@ class MainApp(QMainWindow, ui):
         # Create a VTK rendering widget
         self.vtk_widget = QVTKRenderWindowInteractor(self.vtk_frame)
         self.vtk_frame.layout().addWidget(self.vtk_widget)
-
+        
         # connecting with functions
         self.open_btn.clicked.connect(self.open_folder)
         self.iso_slider.valueChanged.connect(self.start_render_timer)
