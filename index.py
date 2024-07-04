@@ -1,4 +1,11 @@
 from PyQt5.QtWidgets import *
+from PyQt5.QtWidgets import *
+import pyqtgraph as pg
+import sys
+import os
+from pathlib import Path
+from PyQt5.uic import loadUiType
+import pyqtgraph as pg
 from PyQt5.uic import loadUiType
 import sys
 import os
