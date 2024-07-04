@@ -5,8 +5,16 @@ This application utilizes VTK (Visualization Toolkit) along with PyQt5 for visua
 ## Features
 
 - **Surface Rendering**: Utilizes Marching Cubes algorithm to extract and visualize iso-surfaces from DICOM images.
+
+<img src="assets/Surface300.png" alt="Surface Rendering - ISO Value 300" width="500"/> <img src="assets/Surface90.png" alt="Surface Rendering - ISO Value 90" width="500"/>
+  
 - **Volume Rendering**: Uses GPU-accelerated ray casting to render DICOM volumes with adjustable opacity and color mapping.
+
+<img src="assets/RayCasting.png" alt="Ray Casting Rendering" width="500"/>
+
 - **Interactive UI**: PyQt5 is used for the graphical user interface, allowing users to interactively select DICOM folders, adjust rendering parameters, and switch between surface and volume rendering.
+
+<img src="assets/review.gif" alt="Review" width="500"/>
 
 ## Requirements
 
