@@ -78,7 +78,7 @@ Ensure you have the following dependencies installed:
     </td>
     <td align="center">
     <a href="https://github.com/MohammedAziz" target="_black">
-    <img src="https://avatars.githubusercontent.com/u/103186952?v=4" width="150px;" alt="Mohammed Aziz"/>
+    <img src="https://avatars.githubusercontent.com/u/103120952?v=4" width="150px;" alt="Mohammed Aziz"/>
     <br />
     <sub><b>Mohammed Aziz</b></sub></a>
     </td>
